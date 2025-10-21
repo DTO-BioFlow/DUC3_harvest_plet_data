@@ -3,7 +3,7 @@ import requests
 from shapely import wkt
 from typing import List
 from typing import Optional
-from staticmap import Polygon
+from staticmap import Polygon as st_Polygon
 from staticmap import StaticMap
 import matplotlib.pyplot as plt
 from shapely.geometry import shape
@@ -107,13 +107,14 @@ class OSPARRegions:
             if feature["properties"].get("ID")
         ]
 
-    def plot_map(self,
-                 id: Optional[str] = None,
-                 show: bool = True,
-                 output_dir: Optional[str] = None
-                 ) -> None:
+    def plot_map(
+            self,
+            id: Optional[str] = None,
+            show: bool = True,
+            output_dir: Optional[str] = None
+    ) -> None:
         """
-        Plot the geometry of a specific feature ID or all features on a map.
+        Plot the geometry of a specific feature ID or all features on a static map.
 
         If an ID is provided, only that feature is plotted. Otherwise, all
         features in the dataset are plotted.
@@ -122,88 +123,113 @@ class OSPARRegions:
         :type id: Optional[str]
         :param show: Whether to display the plot interactively.
         :type show: bool
-        :param output_dir: Directory to save the plot image. If None, plot is
-            not saved.
+        :param output_dir: Directory to save the plot image. If None, plot is not saved.
         :type output_dir: Optional[str]
-
         :returns: None
         :rtype: None
         """
-        features = self.data["features"]
+        # Get the list of features to plot
+        features = self.data.get("features", [])
+        if not features:
+            raise ValueError("No features found in dataset.")
 
+        # Filter by ID if provided
         if id:
             features = [f for f in features if f["properties"].get("ID") == id]
             if not features:
-                raise ValueError(f"No feature with ID '{id}' found.")
+                raise ValueError(
+                    f"No feature with ID '{id}' found in dataset.")
             filename = f"{id}.png"
-            title = f"Region ID: {id}"
+            title = f"OSPAR Region ID: {id}"
         else:
-            filename = "full_dataset.png"
-            title = "OSPAR Regions"
+            filename = "ospar_all_regions.png"
+            title = "All OSPAR Regions"
 
+        # Initialize map
         m = StaticMap(800, 800)
 
-        for feature in features:
-            geom = shape(feature["geometry"])
-
-            def coords_to_tuples(geom):
-                if geom.geom_type == "Polygon":
-                    return [(x, y) for x, y in geom.exterior.coords]
-                elif geom.geom_type == "MultiPolygon":
-                    # Return list of rings for each polygon part
-                    return [
-                        [(x, y) for x, y in poly.exterior.coords]
-                        for poly in geom.geoms
-                    ]
-                else:
-                    return []
-
-            coords = coords_to_tuples(geom)
+        # Helper function for geometry coordinate extraction
+        def extract_coords(geom):
+            """Convert shapely geometry to list(s) of (lon, lat) tuples."""
+            if geom.is_empty:
+                return []
 
             if geom.geom_type == "Polygon":
-                polygon = Polygon(coords,
-                                  fill_color='#FF000080',
-                                  outline_color='#FF0000')
+                return [(x, y) for x, y in geom.exterior.coords]
+
+            elif geom.geom_type == "MultiPolygon":
+                return [
+                    [(x, y) for x, y in poly.exterior.coords]
+                    for poly in geom.geoms
+                    if not poly.is_empty
+                ]
+
+            else:
+                return []
+
+        # Add polygons to map
+        for feature in features:
+            try:
+                geom = shape(feature["geometry"])
+            except Exception as e:
+                print(
+                    f"Warning: could not parse geometry for feature {feature.get('id')}: {e}")
+                continue
+
+            coords = extract_coords(geom)
+            if not coords:
+                continue
+
+            if geom.geom_type == "Polygon":
+                polygon = st_Polygon(coords,
+                                  "#FF000080",
+                                  "#FF0000",
+                                  )
                 m.add_polygon(polygon)
+
             elif geom.geom_type == "MultiPolygon":
                 for poly_coords in coords:
-                    polygon = Polygon(poly_coords,
-                                      fill_color='#FF000080',
-                                      outline_color='#FF0000')
+                    polygon = st_Polygon(poly_coords,
+                                      "#FF000080",
+                                      "#FF0000"
+                                      )
                     m.add_polygon(polygon)
 
-        # Render map to PIL image
-        image = m.render()
+        # Render map image
+        try:
+            image = m.render()
+        except Exception as e:
+            raise RuntimeError(f"Error rendering static map: {e}")
 
-        # Save or show the image
+        # Save image to file if requested
         if output_dir:
             try:
                 os.makedirs(output_dir, exist_ok=True)
                 file_path = os.path.join(output_dir, filename)
                 image.save(file_path)
-                print(f"Saved map image to {file_path}")
+                print(f"✅ Saved map image to {file_path}")
             except Exception as e:
                 print(
-                    f"Warning: Could not save plot to '{output_dir}'. "
-                    f"Error: {e}")
+                    f"⚠️ Warning: Could not save plot to '{output_dir}'. Error: {e}")
 
+        # Display the image interactively
         if show:
-            # Display image with matplotlib
             plt.imshow(image)
-            plt.axis('off')
+            plt.axis("off")
             plt.title(title)
+            plt.tight_layout()
             plt.show()
 
 
-if __name__ == "__main__":
-    comp_regions = OSPARRegions()
-    print(comp_regions.get_wkt("NAAP2", simplify=False))
-    print('-----')
-    print(comp_regions.get_wkt("NAAP2", simplify=True))
-    comp_regions.plot_map("NAAC3")
-    # id_list = comp_regions.get_all_ids()
-    # for item in id_list:
-    #     print(item)
+# if __name__ == "__main__":
+#     comp_regions = OSPARRegions()
+#     print(comp_regions.get_wkt("NAAP2", simplify=False))
+#     print('-----')
+#     print(comp_regions.get_wkt("NAAP2", simplify=True))
+#     comp_regions.plot_map("NAAC3")
+#     id_list = comp_regions.get_all_ids()
+#     for item in id_list:
+#         print(item)
 
 
 
