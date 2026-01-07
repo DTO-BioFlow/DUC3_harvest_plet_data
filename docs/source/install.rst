@@ -5,4 +5,4 @@ Using pip install:
 
 .. code-block:: console
 
-    pip install -q "git+https://github.com/willem0boone/harvest_plet#egg=harvest_plet"
+    pip install -q "git+https://github.com/DTO-BioFlow/DUC3_harvest_plet_data#egg=harvest_plet"
