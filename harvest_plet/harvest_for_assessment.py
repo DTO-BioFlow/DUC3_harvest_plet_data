@@ -2,13 +2,11 @@ from __future__ import annotations
 
 import os
 import re
-import s3fs
 import hashlib
 import logging
 import warnings
 import unicodedata
 import pandas as pd
-import xarray as xr
 import datetime as dt
 from pathlib import Path
 from datetime import date
