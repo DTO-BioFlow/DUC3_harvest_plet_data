@@ -10,6 +10,7 @@ from shapely.geometry import shape
 from shapely.geometry import Polygon
 from shapely.geometry import MultiPolygon
 from shapely.geometry.base import BaseGeometry
+from shapely.ops import unary_union
 
 
 class OSPARRegions:
@@ -48,12 +49,11 @@ class OSPARRegions:
 
     def get_wkt(self, id: str, simplify: bool = False) -> Optional[str]:
         """
-        Retrieve the WKT (Well-Known Text) geometry string for a given feature
-        ID.
+        Retrieve the WKT (Well-Known Text) geometry string for a given feature ID.
 
         Optionally simplifies the geometry to reduce its size while preserving
-        topology. Simplification continues iteratively until the WKT length is
-        below 5000 characters or the tolerance reaches 1.0.
+        topology. Tiny polygons are removed and coordinates are rounded to
+        0.01 precision.
 
         :param id: The unique identifier of the feature.
         :type id: str
@@ -68,29 +68,43 @@ class OSPARRegions:
             return None
 
         if simplify:
-            tolerance = 0.001
+            tolerance = 0.01  # starting simplification tolerance
+            max_len = 5000  # target max WKT length
             simplified = geometry
 
             while True:
+                # Simplify geometry with topology preserved
                 simplified = simplified.simplify(tolerance,
                                                  preserve_topology=True)
-                simplified = simplified.buffer(0)  # fix minor invalidities
 
-                # Convert single MultiPolygon to Polygon
-                if isinstance(simplified, MultiPolygon) and len(
-                        simplified.geoms) == 1:
-                    simplified = simplified.geoms[0]
+                # Merge close/overlapping polygons
+                if isinstance(simplified, (MultiPolygon, Polygon)):
+                    simplified = unary_union(simplified)
 
-                # Optionally round coordinates to reduce WKT length
+                # Remove tiny polygons (area threshold)
+                if isinstance(simplified, MultiPolygon):
+                    simplified = MultiPolygon(
+                        [p for p in simplified.geoms if p.area > 0.0001])
+                    if len(simplified.geoms) == 1:
+                        simplified = simplified.geoms[0]
+
+                # Fix any invalid geometries
+                simplified = simplified.buffer(0)
+
+                # Round coordinates to 0.01 precision
                 simplified = wkt.loads(
-                    wkt.dumps(simplified, rounding_precision=5))
+                    wkt.dumps(simplified, rounding_precision=2))
 
-                if len(simplified.wkt) <= 5000 or tolerance >= 1.0:
+                # Stop if WKT is small enough or tolerance too high
+                if len(simplified.wkt) <= max_len or tolerance >= 1.0:
                     break
 
-                tolerance *= 2
+                tolerance *= 2  # increase simplification tolerance
 
             geometry = simplified
+        else:
+            # Even without simplification, round coordinates to 0.01 precision
+            geometry = wkt.loads(wkt.dumps(geometry, rounding_precision=2))
 
         return geometry.wkt
 
@@ -221,15 +235,15 @@ class OSPARRegions:
             plt.show()
 
 
-# if __name__ == "__main__":
-#     comp_regions = OSPARRegions()
-#     print(comp_regions.get_wkt("NAAP2", simplify=False))
-#     print('-----')
-#     print(comp_regions.get_wkt("NAAP2", simplify=True))
-#     comp_regions.plot_map("NAAC3")
-#     id_list = comp_regions.get_all_ids()
-#     for item in id_list:
-#         print(item)
+if __name__ == "__main__":
+    comp_regions = OSPARRegions()
+    print(comp_regions.get_wkt("NAAC2", simplify=False))
+    print('-----')
+    print(comp_regions.get_wkt("NAAC2", simplify=True))
+    comp_regions.plot_map("NAAC2")
+    id_list = comp_regions.get_all_ids()
+    for item in id_list:
+        print(item)
 
 
 

@@ -2,16 +2,14 @@ from __future__ import annotations
 
 import os
 import re
-import yaml
 import s3fs
 import hashlib
 import logging
 import warnings
 import unicodedata
 import pandas as pd
+import xarray as xr
 import datetime as dt
-from typing import Dict
-from typing import List
 from pathlib import Path
 from datetime import date
 from typing import Optional
@@ -149,6 +147,10 @@ def harvest_for_assessment(start_date: date,
                     continue
 
                 region_wkt = comp_regions.get_wkt(id=region_id, simplify=True)
+
+                print(region_id)
+                print(region_wkt)
+
                 plet_harvester.harvest_data(
                     start_date=start_date,
                     end_date=end_date,
@@ -262,28 +264,158 @@ def to_parquet(
         print(f"✅ Parquet file saved locally at: {out_path}")
 
 
-def export_to_csv(csv_dir: Optional[str] = None,
-                  out_path: Optional[str] = None) -> None:
+def to_netcdf(
+    csv_dir: str = ".cache",
+    out_path: str = "merged-data.nc",
+    use_s3: bool = False,
+    bucket: Optional[str] = None,
+    endpoint_url: Optional[str] = None,
+    aws_access_key_id: Optional[str] = None,
+    aws_secret_access_key: Optional[str] = None,
+    aws_session_token: Optional[str] = None,
+) -> None:
     """
-    Merge CSV files into a single CSV file with dataset/region columns first.
+    Converts all CSV files in a directory to a single merged NetCDF file.
 
-    :param csv_dir: Directory containing CSV files. Defaults to '.cache'.
-    :type csv_dir: Optional[str]
-    :param out_path: Output CSV file path. Defaults to 'merged.csv'.
-    :type out_path: Optional[str]
-    :return: None
-    :rtype: None
+    If `use_s3=True`, the file is stored in the given S3/MinIO bucket.
+    First, it writes locally to a temporary directory (.cache_merged) to ensure
+    proper NetCDF creation.
+
+    :param csv_dir: Directory containing CSV files. Defaults to ".cache".
+    :param out_path: Output path (local or remote). Defaults to "merged-data.nc".
+    :param use_s3: Whether to save to S3/MinIO.
+    :param bucket: S3/MinIO bucket name.
+    :param endpoint_url: S3/MinIO endpoint URL.
+    :param aws_access_key_id: Access key ID.
+    :param aws_secret_access_key: Secret access key.
+    :param aws_session_token: Optional session token.
     """
-    if csv_dir is None:
-        csv_dir = Path(".cache")
+    # Merge CSV files using your existing helper
+    merged_df = _load_and_merge(csv_dir)
+    merged_df.columns = [
+        c.replace("/", "_").replace(" ", "_").replace("\\", "_") for c in
+        merged_df.columns
+    ]
 
+    # Convert DataFrame to xarray Dataset
+    ds = xr.Dataset.from_dataframe(merged_df)
+
+    if use_s3:
+        if not all([bucket, endpoint_url, aws_access_key_id, aws_secret_access_key]):
+            raise ValueError("Missing S3 credentials or bucket configuration.")
+
+        # Ensure local temp folder exists
+        tmp_dir = Path(".cache_merged")
+        tmp_dir.mkdir(exist_ok=True)
+
+        # Full path for temporary NetCDF file
+        local_tmp_file = tmp_dir / out_path
+
+        # Ensure all parent directories exist
+        local_tmp_file.parent.mkdir(parents=True, exist_ok=True)
+
+        # Step 1: Write locally first
+        ds.to_netcdf(local_tmp_file, engine="h5netcdf")
+        print(f"✅ NetCDF file saved locally at: {local_tmp_file} (temporary)")
+
+        # Step 2: Upload to S3
+        s3_path = f"{bucket}/{out_path.lstrip('/')}"
+        fs = s3fs.S3FileSystem(
+            key=aws_access_key_id,
+            secret=aws_secret_access_key,
+            token=aws_session_token,
+            client_kwargs={"endpoint_url": endpoint_url},
+        )
+        fs.put(str(local_tmp_file), s3_path)
+        print(f"✅ NetCDF file uploaded to S3: s3://{s3_path}")
+
+        # Step 3: Clean up local temp file
+        local_tmp_file.unlink()
+    else:
+        # Save locally in the given out_path
+        out_file = Path(out_path)
+        out_file.parent.mkdir(parents=True, exist_ok=True)  # ensure subfolders exist
+        ds.to_netcdf(out_file, engine="h5netcdf")
+        print(f"✅ NetCDF file saved locally at: {out_file}")
+
+
+def export_to_csv(
+    csv_dir: Optional[str] = None,
+    out_path: Optional[str] = None,
+    use_s3: bool = False,
+    bucket: Optional[str] = None,
+    endpoint_url: Optional[str] = None,
+    aws_access_key_id: Optional[str] = None,
+    aws_secret_access_key: Optional[str] = None,
+    aws_session_token: Optional[str] = None,
+) -> None:
+    """
+    Merge CSV files from a local directory into a single CSV file.
+
+    Optionally save the merged CSV to S3/MinIO.
+
+    :param csv_dir: Local directory containing CSV files. Defaults to '.cache'.
+    :param out_path: Output CSV path (local path or S3 key). Defaults to 'merged.csv'.
+    :param use_s3: Whether to save the merged CSV to S3.
+    :param bucket: S3/MinIO bucket name (required if use_s3=True).
+    :param endpoint_url: S3/MinIO endpoint URL (required if use_s3=True).
+    :param aws_access_key_id: Access key ID (required if use_s3=True).
+    :param aws_secret_access_key: Secret access key (required if use_s3=True).
+    :param aws_session_token: Optional session token.
+    """
+    import tempfile
+    import s3fs
+    from pathlib import Path
+    import pandas as pd
+
+    csv_dir = Path(csv_dir or ".cache")
+    if not csv_dir.exists() or not csv_dir.is_dir():
+        raise FileNotFoundError(f"CSV directory not found: {csv_dir}")
+
+    # Merge CSV files using existing helper
     merged_df = _load_and_merge(csv_dir)
 
-    if out_path is None:
-        out_path = "merged.csv"
+    if 'num_samples' in merged_df.columns:
+        merged_df = merged_df[merged_df['num_samples'] != 0]
 
-    merged_df.to_csv(out_path, index=False, encoding="utf-8")
-    print(f"CSV file saved at: {out_path}")
+    # Sanitize column names
+    merged_df.columns = [
+        c.replace("/", "_").replace(" ", "_").replace("\\", "_") for c in merged_df.columns
+    ]
+
+    # Set default output path
+    out_path = out_path or "merged.csv"
+
+    if use_s3:
+        if not all([bucket, endpoint_url, aws_access_key_id, aws_secret_access_key]):
+            raise ValueError("Missing S3 credentials or bucket configuration.")
+
+        # Write to temporary file first
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False, encoding="utf-8") as tmp_file:
+            merged_df.to_csv(tmp_file.name, index=False)
+            tmp_file.flush()
+            tmp_path = tmp_file.name
+
+        # Upload to S3
+        fs = s3fs.S3FileSystem(
+            key=aws_access_key_id,
+            secret=aws_secret_access_key,
+            token=aws_session_token,
+            client_kwargs={"endpoint_url": endpoint_url},
+        )
+        s3_path = f"{bucket}/{out_path.lstrip('/')}"
+        fs.put(tmp_path, s3_path)
+        print(f"✅ Merged CSV uploaded to S3: s3://{s3_path}")
+
+        # Remove temporary file
+        Path(tmp_path).unlink()
+
+    else:
+        # Save locally
+        out_file = Path(out_path)
+        out_file.parent.mkdir(parents=True, exist_ok=True)
+        merged_df.to_csv(out_file, index=False, encoding="utf-8")
+        print(f"✅ Merged CSV saved locally at: {out_file}")
 
 
 if __name__ == "__main__":
@@ -295,22 +427,40 @@ if __name__ == "__main__":
     start_date = date(2015, 1, 1)
     end_date = date(2025, 1, 1)
 
-    # harvest_for_assessment(start_date=start_date,
-    #                        end_date=end_date)
+    harvest_for_assessment(start_date=start_date,
+                           end_date=end_date)
+
+    # Export merged Parquet directly to MinIO/S3
+    to_parquet(
+        csv_dir=".cache",
+        out_path="data/merged-data3.parquet",
+        use_s3=True,
+        bucket=config.settings.bucket,
+        endpoint_url=config.settings.endpoint_url,
+        aws_access_key_id=config.settings.aws_access_key_id,
+        aws_secret_access_key=config.settings.aws_secret_access_key,
+        aws_session_token=config.settings.aws_session_token
+    )
+
+    to_netcdf(
+        csv_dir=".cache",
+        out_path="data/merged-data3.nc",
+        use_s3=True,
+        bucket=config.settings.bucket,
+        endpoint_url=config.settings.endpoint_url,
+        aws_access_key_id=config.settings.aws_access_key_id,
+        aws_secret_access_key=config.settings.aws_secret_access_key,
+        aws_session_token=config.settings.aws_session_token
+    )
 
     export_to_csv(
         csv_dir=".cache",
-        out_path="C:/Users/willem.boone/Downloads/merged_PLET.csv"
+        out_path="data/merged-data3.csv",
+        use_s3=True,
+        bucket=config.settings.bucket,
+        endpoint_url=config.settings.endpoint_url,
+        aws_access_key_id=config.settings.aws_access_key_id,
+        aws_secret_access_key=config.settings.aws_secret_access_key,
+        aws_session_token=config.settings.aws_session_token
     )
 
-    # Export merged Parquet directly to MinIO/S3
-    # to_parquet(
-    #     csv_dir=".cache",
-    #     out_path="data/merged-data3.parquet",
-    #     use_s3=True,
-    #     bucket=config.settings.bucket,
-    #     endpoint_url=config.settings.endpoint_url,
-    #     aws_access_key_id=config.settings.aws_access_key_id,
-    #     aws_secret_access_key=config.settings.aws_secret_access_key,
-    #     aws_session_token=config.settings.aws_session_token
-    # )

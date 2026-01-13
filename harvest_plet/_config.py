@@ -26,9 +26,9 @@ class Config:
         Initializes the Config object.
 
         :param config_file: Optional; Path to the configuration file.
-            If not provided, defaults to 'config/config.toml'.
+            If not provided, defaults to 'config/s3_config.toml'.
         """
-        # If no config file is provided, default to 'config/config.toml'
+        # If no config file is provided, default to 'config/s3_config.toml'
         self._config_file = config_file or os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
             "config/s3_config.toml"
