@@ -93,6 +93,7 @@ Harvest full data for assessment
 .. code-block:: python
 
     from datetime import date
+    from harvest_plet.harvest_plet import harvest_for_assessment
     start_date = date(2015, 1, 1)
     end_date = date(2025, 1, 1)
 
