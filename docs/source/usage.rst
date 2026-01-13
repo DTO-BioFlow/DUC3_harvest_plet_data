@@ -86,3 +86,19 @@ Harvest the data
     dataset_name="BE Flanders Marine Institute (VLIZ) - LW_VLIZ_phyto")
 
 
+
+Harvest full data for assessment
+--------------------------------
+
+.. code-block:: python
+    from datetime import date
+    start_date = date(2015, 1, 1)
+    end_date = date(2025, 1, 1)
+
+    df = harvest_for_assessment(start_date=start_date,
+                                end_date=end_date)
+
+    for i, item in enumerate(df.head(10).itertuples()):
+        print(i, item)
+
+
