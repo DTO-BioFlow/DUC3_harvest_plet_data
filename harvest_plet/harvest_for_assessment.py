@@ -230,3 +230,8 @@ if __name__ == "__main__":
 
     for i, item in enumerate(df.head(10).itertuples()):
         print(i, item)
+
+    print("-"*50)
+    df_SCHPM1 = df[df["region_id"] == "SCHPM1"]
+    for i, item in enumerate(df_SCHPM1.head(50).itertuples()):
+        print(i, item)

@@ -11,6 +11,7 @@ from shapely.geometry import Polygon
 from shapely.geometry import MultiPolygon
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
+import warnings
 
 
 class OSPARRegions:
@@ -68,43 +69,85 @@ class OSPARRegions:
             return None
 
         if simplify:
-            tolerance = 0.01  # starting simplification tolerance
-            max_len = 5000  # target max WKT length
+            tolerance = 0.01
+            max_len = 5000
             simplified = geometry
 
             while True:
-                # Simplify geometry with topology preserved
+                # Simplify with topology preserved
                 simplified = simplified.simplify(tolerance,
                                                  preserve_topology=True)
 
-                # Merge close/overlapping polygons
+                # Merge overlapping polygons
                 if isinstance(simplified, (MultiPolygon, Polygon)):
                     simplified = unary_union(simplified)
 
-                # Remove tiny polygons (area threshold)
+                # Remove tiny polygons
                 if isinstance(simplified, MultiPolygon):
                     simplified = MultiPolygon(
                         [p for p in simplified.geoms if p.area > 0.0001])
                     if len(simplified.geoms) == 1:
                         simplified = simplified.geoms[0]
 
-                # Fix any invalid geometries
-                simplified = simplified.buffer(0)
+                # Fix invalid geometries
+                if not simplified.is_valid:
+                    simplified = simplified.buffer(0)
+                    if not simplified.is_valid:
+                        warnings.warn(
+                            f"Geometry for ID '{id}' is invalid even after buffer(0).")
+                        break
 
-                # Round coordinates to 0.01 precision
-                simplified = wkt.loads(
-                    wkt.dumps(simplified, rounding_precision=2))
+                # Round coordinates
+                def round_coords(geom: BaseGeometry,
+                                 precision: int = 2) -> BaseGeometry:
+                    if isinstance(geom, Polygon):
+                        exterior = [(round(x, precision), round(y, precision))
+                                    for x, y in geom.exterior.coords]
+                        interiors = [
+                            [(round(x, precision), round(y, precision)) for
+                             x, y in ring.coords] for ring in geom.interiors]
+                        return Polygon(exterior, interiors)
+                    elif isinstance(geom, MultiPolygon):
+                        return MultiPolygon(
+                            [round_coords(p, precision) for p in geom.geoms])
+                    return geom
 
-                # Stop if WKT is small enough or tolerance too high
+                simplified = round_coords(simplified, precision=2)
+
+                # Fix invalidity introduced by rounding
+                if not simplified.is_valid:
+                    simplified = simplified.buffer(0)
+
                 if len(simplified.wkt) <= max_len or tolerance >= 1.0:
                     break
 
-                tolerance *= 2  # increase simplification tolerance
+                tolerance *= 2
 
             geometry = simplified
+
         else:
-            # Even without simplification, round coordinates to 0.01 precision
-            geometry = wkt.loads(wkt.dumps(geometry, rounding_precision=2))
+            # Non-simplified: just round coordinates
+            def round_coords(geom: BaseGeometry,
+                             precision: int = 2) -> BaseGeometry:
+                if isinstance(geom, Polygon):
+                    exterior = [(round(x, precision), round(y, precision)) for
+                                x, y in geom.exterior.coords]
+                    interiors = [
+                        [(round(x, precision), round(y, precision)) for x, y in
+                         ring.coords] for ring in geom.interiors]
+                    return Polygon(exterior, interiors)
+                elif isinstance(geom, MultiPolygon):
+                    return MultiPolygon(
+                        [round_coords(p, precision) for p in geom.geoms])
+                return geom
+
+            geometry = round_coords(geometry, precision=2)
+
+            if not geometry.is_valid:
+                geometry = geometry.buffer(0)
+                if not geometry.is_valid:
+                    warnings.warn(
+                        f"Geometry for ID '{id}' is invalid even after buffer(0).")
 
         return geometry.wkt
 
@@ -237,13 +280,26 @@ class OSPARRegions:
 
 if __name__ == "__main__":
     comp_regions = OSPARRegions()
-    print(comp_regions.get_wkt("NAAC2", simplify=False))
-    print('-----')
-    print(comp_regions.get_wkt("NAAC2", simplify=True))
-    comp_regions.plot_map("NAAC2")
-    id_list = comp_regions.get_all_ids()
-    for item in id_list:
-        print(item)
+    # print(comp_regions.get_wkt("NAAC2", simplify=False))
+    # print('-----')
+    # print(comp_regions.get_wkt("NAAC2", simplify=True))
+    # comp_regions.plot_map("NAAC2")
+    # id_list = comp_regions.get_all_ids()
+    # for item in id_list:
+    #     print(item)
+
+    from shapely import wkt
+    from shapely.validation import explain_validity
+
+    my_wkt = comp_regions.get_wkt("SCHPM1", simplify=True)
+    poly = wkt.loads(my_wkt)
+    print("Is valid?", poly.is_valid)
+
+    if not poly.is_valid:
+        print("Reason:", explain_validity(poly))
+        # Attempt to fix
+        poly_fixed = poly.buffer(0)
+        print("Fixed polygon valid?", poly_fixed.is_valid)
 
 
 
