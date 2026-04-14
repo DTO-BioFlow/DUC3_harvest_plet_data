@@ -87,23 +87,6 @@ Harvest the data
 
 
 
-Harvest full data for assessment
---------------------------------
-
-.. code-block:: python
-
-    from datetime import date
-    from harvest_plet.harvest_plet import harvest_for_assessment
-    start_date = date(2015, 1, 1)
-    end_date = date(2025, 1, 1)
-
-    df = harvest_for_assessment(start_date=start_date,
-                                end_date=end_date)
-
-    for i, item in enumerate(df.head(10).itertuples()):
-        print(i, item)
-
-
 Changing the base URL
 ---------------------
 In 2026 a clone was setup that harvests data from ICES DOME API.
@@ -122,7 +105,7 @@ The package offers simple selection:
 
     from harvest_plet.plet import PLETHarvester
     plet_harvester = PLETHarvester()
-    pprint(plet.get_instances())
+    pprint(plet_harvester.get_instances())
 
 This will return
 
@@ -148,3 +131,40 @@ You can select an instance by setting instance
 
 After this the harvesting can be done as before, but now the data will be
 harvested from the PLET DOME instance instead of the original PLET instance.
+
+
+Harvest full data for assessment
+--------------------------------
+
+.. code-block:: python
+
+    from datetime import date
+    from harvest_plet.harvest_plet import harvest_for_assessment
+    start_date = date(2015, 1, 1)
+    end_date = date(2025, 1, 1)
+
+    df = harvest_for_assessment(start_date=start_date,
+                                end_date=end_date)
+
+    for i, item in enumerate(df.head(10).itertuples()):
+        print(i, item)
+
+If you want to define the PLET instance to harvest from, you can set the
+instance before calling the function:
+
+.. code-block:: python
+
+    from datetime import date
+    from harvest_plet.harvest_plet import harvest_for_assessment
+    from harvest_plet.plet import PLETHarvester
+
+    plet = PLETHarvester()
+    plet.set_instance("PLET-DOME")
+
+    start_date = date(2020, 1, 1)
+    end_date = date(2021, 1, 1)
+
+    df = harvest_for_assessment(start_date=start_date,
+                                end_date=end_date,
+                                plet_harvester=plet,
+                                logs_dir="logs")
