@@ -1,39 +1,21 @@
-import json
+from pathlib import Path
+import sys
 # Configuration file for the Sphinx documentation builder.
 
 # -- Project information
 
 project = 'Harvest Plet'
-copyright = '2025, Willem Boone'
+copyright = '2026, Willem Boone'
 author = 'Willem Boone'
 
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-def extract_version_from_file(file_path):
-    try:
-        # Open and read the JSON file
-        with open(file_path, 'r') as file:
-            data = json.load(file)
+from harvest_plet import __version__  # noqa: E402
 
-        # Extract and return the version
-        return data.get('version', 'Version not found')
-
-    except FileNotFoundError:
-        return f"Error: The file '{file_path}' was not found."
-
-    except json.JSONDecodeError:
-        return "Error: The file could not be decoded as JSON."
-
-    except Exception as e:
-        return f"An unexpected error occurred: {e}"
-
-
-
-# release = '0.1'
-# version = '0.1.0'
-
-codemeta = "../../codemeta.json"
-version = extract_version_from_file(codemeta)
-# print(version)
+version = __version__
+release = __version__
 
 
 # -- General configuration
