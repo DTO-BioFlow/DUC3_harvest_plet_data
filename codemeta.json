@@ -7,9 +7,7 @@
   "codeRepository": "https://github.com/willem0boone/harvest_plet",
   "issueTracker": "TBD",
   "license": "MIT License",
-  "version": "0.2.0",
   "datePublished": "2025-05",
-  "dateModified": "2025-05",
   "programmingLanguage": [
     {
       "@type": "ComputerLanguage",
