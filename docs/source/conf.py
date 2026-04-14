@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 import sys
 # Configuration file for the Sphinx documentation builder.
@@ -14,8 +15,15 @@ if str(ROOT) not in sys.path:
 
 from harvest_plet import __version__  # noqa: E402
 
-version = __version__
 release = __version__
+
+
+def _short_version(full_version: str) -> str:
+    """Drop a trailing patch-zero component for a shorter Sphinx version."""
+    return re.sub(r"^(\d+\.\d+)\.0(\.post\d+.*)?$", r"\1\2", full_version)
+
+
+version = _short_version(release)
 
 
 # -- General configuration
