@@ -1,0 +1,12 @@
+{
+  "PLET-DOME":
+  {
+    "BASE_URL":  "https://www.dassh.ac.uk/plet-dome/cgi-bin/get_form.py",
+    "SITE_URL": "https://www.dassh.ac.uk/plet-dome/"
+  },
+  "PLET":
+  {
+    "BASE_URL": "https://www.dassh.ac.uk/plet/cgi-bin/get_form.py",
+    "SITE_URL": "https://www.dassh.ac.uk/lifeforms/"
+  }
+}
