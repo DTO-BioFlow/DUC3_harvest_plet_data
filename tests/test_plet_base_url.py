@@ -1,8 +1,7 @@
 from harvest_plet.plet import PLETHarvester
 plet_harvester = PLETHarvester()
 
-# setting the new base url
-plet_harvester.base_url = "https://www.dassh.ac.uk/plet-dome/cgi-bin/get_form.py"
+plet_harvester.set_instance("PLET-DOME")
 
 # Find all dataset names
 dataset_names = plet_harvester.get_dataset_names()
@@ -31,5 +30,5 @@ harvest = plet_harvester.harvest_data(
     start_date=start_date,
     end_date=end_date,
     wkt=wkt_sns,
-    dataset_name="BE Flanders Marine Institute (VLIZ) - LW_VLIZ_phyto")
+    dataset_name="Belgium - VLIZ - phytoplankton (nrcells/l)")
 print(harvest)

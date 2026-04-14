@@ -3,6 +3,8 @@ import re
 import csv
 import io
 import time
+import json
+import copy
 import requests
 import warnings
 from typing import List
@@ -10,6 +12,7 @@ from typing import Dict
 from typing import Union
 from typing import Optional
 from datetime import date
+from pathlib import Path
 from bs4 import BeautifulSoup
 from shapely import wkt as wkt_loader
 
@@ -27,8 +30,10 @@ class PLETHarvester:
     ``base_url`` or ``BASE_URL`` after construction.
     """
 
+    DEFAULT_INSTANCE: str = "PLET"
     BASE_URL: str = "https://www.dassh.ac.uk/plet/cgi-bin/get_form.py"
     SITE_URL: str = "https://www.dassh.ac.uk/lifeforms/"
+    _instances_cache: Optional[Dict[str, Dict[str, str]]] = None
 
     def __init__(self) -> None:
         """
@@ -36,6 +41,65 @@ class PLETHarvester:
         session.
         """
         self.session = requests.Session()
+        self._instance_name: Optional[str] = None
+        self.set_instance(self.DEFAULT_INSTANCE)
+
+    @classmethod
+    def _get_endpoints_path(cls) -> Path:
+        """Return the local path of the endpoint instance registry."""
+        return Path(__file__).resolve().parent / "config" / "endpoints.json"
+
+    @classmethod
+    def _load_instances(cls) -> Dict[str, Dict[str, str]]:
+        """Load endpoint instances from config and cache them."""
+        if cls._instances_cache is None:
+            endpoints_path = cls._get_endpoints_path()
+            try:
+                with endpoints_path.open("r", encoding="utf-8") as f_in:
+                    data = json.load(f_in)
+            except FileNotFoundError as exc:
+                raise RuntimeError(
+                    f"Endpoint config not found: {endpoints_path}") from exc
+            except json.JSONDecodeError as exc:
+                raise RuntimeError(
+                    f"Endpoint config is not valid JSON: {endpoints_path}") from exc
+
+            if not isinstance(data, dict):
+                raise RuntimeError(
+                    "Endpoint config must contain a top-level JSON object")
+            cls._instances_cache = data
+        return cls._instances_cache
+
+    @classmethod
+    def get_instances(cls) -> Dict[str, Dict[str, str]]:
+        """Return all configured endpoint instances from endpoints.json."""
+        return copy.deepcopy(cls._load_instances())
+
+    def set_instance(self, instance_name: str) -> None:
+        """Switch both URLs to a named instance from endpoints.json."""
+        if not isinstance(instance_name, str) or not instance_name.strip():
+            raise ValueError("instance_name must be a non-empty string")
+
+        instance_key = instance_name.strip()
+        instances = self._load_instances()
+        if instance_key not in instances:
+            available = ", ".join(sorted(instances.keys()))
+            raise ValueError(
+                f"Unknown instance '{instance_key}'. Available instances: {available}")
+
+        config = instances[instance_key]
+        try:
+            self.base_url = config["BASE_URL"]
+            self.site_url = config["SITE_URL"]
+        except KeyError as exc:
+            raise ValueError(
+                f"Instance '{instance_key}' is missing required key: {exc}") from exc
+
+        self._instance_name = instance_key
+
+    def get_instance(self) -> Optional[str]:
+        """Return the currently active instance key, if selected."""
+        return self._instance_name
 
     @property
     def base_url(self) -> str:
@@ -53,6 +117,30 @@ class PLETHarvester:
         """Convenience method for updating the harvest endpoint."""
         self.base_url = value
 
+    def get_base_url(self) -> str:
+        """Convenience method for reading the harvest endpoint."""
+        return self.base_url
+
+    @property
+    def site_url(self) -> str:
+        """Return the currently configured website endpoint."""
+        return self.SITE_URL
+
+    @site_url.setter
+    def site_url(self, value: str) -> None:
+        """Override the website endpoint for this instance."""
+        if not value:
+            raise ValueError("site_url must be a non-empty string")
+        self.SITE_URL = value
+
+    def set_site_url(self, value: str) -> None:
+        """Convenience method for updating the website endpoint."""
+        self.site_url = value
+
+    def get_site_url(self) -> str:
+        """Convenience method for reading the website endpoint."""
+        return self.site_url
+
     def get_dataset_names(self) -> List[str]:
         """
         Retrieve all available dataset names from the DASSH website.
@@ -60,7 +148,7 @@ class PLETHarvester:
         :returns: A list of dataset names available for download.
         :rtype: List[str]
         """
-        response = self.session.get(self.SITE_URL)
+        response = self.session.get(self.site_url)
         response.encoding = response.apparent_encoding  # Fix encoding issues
         soup = BeautifulSoup(response.text, 'html.parser')
 

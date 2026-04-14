@@ -111,12 +111,39 @@ To use this clone, the base URL needs to be changed to
 ``https://www.dassh.ac.uk/plet-dome/cgi-bin/get_form.py`` instead of
 ``https://www.dassh.ac.uk/plet/cgi-bin/get_form.py``
 
+Also the dataset names are changed, these are scraped from the website
+``SITE_URL": "https://www.dassh.ac.uk/plet-dome/``
+instead of
+``https://www.dassh.ac.uk/lifeforms/``
+
+The package offers simple selection:
 
 .. code-block:: python
 
     from harvest_plet.plet import PLETHarvester
     plet_harvester = PLETHarvester()
-    plet_harvester.base_url = "https://www.dassh.ac.uk/plet-dome/cgi-bin/get_form.py"
+    pprint(plet.get_instances())
+
+This will return
+
+.. code-block:: python
+
+    {'PLET':{
+            'BASE_URL': 'https://www.dassh.ac.uk/plet/cgi-bin/get_form.py',
+            'SITE_URL': 'https://www.dassh.ac.uk/lifeforms/'
+            },
+    'PLET-DOME':{
+        'BASE_URL': 'https://www.dassh.ac.uk/plet-dome/cgi-bin/get_form.py',
+               'SITE_URL': 'https://www.dassh.ac.uk/plet-dome/'
+                }
+    }
+
+
+You can select an instance by setting instance
+
+.. code-block:: python
+
+    plet_harvester.set_instance("PLET-DOME")
 
 
 After this the harvesting can be done as before, but now the data will be
