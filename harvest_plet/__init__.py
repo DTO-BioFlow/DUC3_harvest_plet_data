@@ -2,4 +2,7 @@
 This is the docstring for the harvest_plet module.
 """
 
-__version__ = "0.2.2"
+from importlib.metadata import version
+
+__version__ = version("harvest_plet")
+
