@@ -22,6 +22,9 @@ class PLETHarvester:
     Provides functionality to list datasets, query specific data using
     spatiotemporal filters (including OSPAR COMP areas), and save results to
     CSV.
+
+    The default API endpoint can be overridden per instance by assigning to
+    ``base_url`` or ``BASE_URL`` after construction.
     """
 
     BASE_URL: str = "https://www.dassh.ac.uk/plet/cgi-bin/get_form.py"
@@ -33,6 +36,22 @@ class PLETHarvester:
         session.
         """
         self.session = requests.Session()
+
+    @property
+    def base_url(self) -> str:
+        """Return the currently configured harvest endpoint."""
+        return self.BASE_URL
+
+    @base_url.setter
+    def base_url(self, value: str) -> None:
+        """Override the harvest endpoint for this instance."""
+        if not value:
+            raise ValueError("base_url must be a non-empty string")
+        self.BASE_URL = value
+
+    def set_base_url(self, value: str) -> None:
+        """Convenience method for updating the harvest endpoint."""
+        self.base_url = value
 
     def get_dataset_names(self) -> List[str]:
         """
@@ -112,7 +131,7 @@ class PLETHarvester:
 
         for attempt in range(1, retries + 1):
             try:
-                response = self.session.get(self.BASE_URL, params=params,
+                response = self.session.get(self.base_url, params=params,
                                             timeout=timeout)
                 response.raise_for_status()
                 csv_data = response.text
