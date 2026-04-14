@@ -62,7 +62,8 @@ def harvest_for_assessment(start_date: date,
                            end_date: date,
                            out_dir: str | None = None,
                            overwrite: bool = False,
-                           logs_dir: str | None = None
+                           logs_dir: str | None = None,
+                           plet_harvester: Optional[PLETHarvester] = None
                            ) -> pd.DataFrame:
     """
       Harvest datasets for all OSPAR regions within a given date range, with caching
@@ -84,6 +85,9 @@ def harvest_for_assessment(start_date: date,
       :param logs_dir: Directory to store log files. Defaults to a 'logs' folder
           in the package if None.
       :type logs_dir: Optional[str]
+      :param plet_harvester: Optional preconfigured PLET harvester instance.
+          If None, a new default PLETHarvester instance is created.
+      :type plet_harvester: Optional[PLETHarvester]
 
     :return: Merged dataframe with dataset_name and region_id as first columns.
     :rtype: pd.DataFrame
@@ -114,7 +118,8 @@ def harvest_for_assessment(start_date: date,
 
     # harvester and regions
     comp_regions = OSPARRegions()
-    plet_harvester = PLETHarvester()
+    if plet_harvester is None:
+        plet_harvester = PLETHarvester()
     region_ids = comp_regions.get_all_ids()
     dataset_names = plet_harvester.get_dataset_names()
 
