@@ -104,3 +104,20 @@ Harvest full data for assessment
         print(i, item)
 
 
+Changing the base URL
+---------------------
+In 2026 a clone was setup that harvests data from ICES DOME API.
+To use this clone, the base URL needs to be changed to
+``https://www.dassh.ac.uk/plet-dome/cgi-bin/get_form.py`` instead of
+``https://www.dassh.ac.uk/plet/cgi-bin/get_form.py``
+
+
+.. code-block:: python
+
+    from harvest_plet.plet import PLETHarvester
+    plet_harvester = PLETHarvester()
+    plet_harvester.base_url = "https://www.dassh.ac.uk/plet-dome/cgi-bin/get_form.py"
+
+
+After this the harvesting can be done as before, but now the data will be
+harvested from the PLET DOME instance instead of the original PLET instance.
